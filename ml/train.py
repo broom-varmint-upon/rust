@@ -1,7 +1,5 @@
 import sys
-import zipfile
 from pathlib import Path
-from urllib.request import urlretrieve
 
 import lightgbm as lgb
 import numpy as np
@@ -14,12 +12,6 @@ MONTH = "2026-05"
 SYMBOL = "BTCUSDT"
 BASE_INTERVAL = "1s"
 HIGHER_INTERVALS = ["1m", "5m", "15m", "1h", "4h", "1d"]
-DATA_DIR = Path("data")
-
-URL = (
-    "https://data.binance.vision/data/spot/monthly/klines"
-    f"/{SYMBOL}/{{interval}}/{SYMBOL}-{{interval}}-{MONTH}.zip"
-)
 
 CSV_COLS = [
     "open_time", "open", "high", "low", "close", "volume",
@@ -40,20 +32,8 @@ EXCLUDE_COLS = {
 
 # ── Data ────────────────────────────────────────────────────────────────────
 
-def ensure_data(interval: str) -> Path:
-    csv_path = DATA_DIR / f"{SYMBOL}-{interval}-{MONTH}.csv"
-    if csv_path.exists():
-        return csv_path
-
-    DATA_DIR.mkdir(exist_ok=True)
-    zip_path = DATA_DIR / f"{SYMBOL}-{interval}-{MONTH}.zip"
-    print(f"  downloading {interval}...")
-    urlretrieve(URL.format(interval=interval), zip_path)
-
-    with zipfile.ZipFile(zip_path) as zf:
-        zf.extractall(DATA_DIR)
-    zip_path.unlink()
-    return csv_path
+def csv_name(interval: str) -> Path:
+    return Path(f"{SYMBOL}-{interval}-{MONTH}.csv")
 
 
 def load(csv_path: Path) -> pd.DataFrame:
@@ -176,15 +156,9 @@ def evaluate(model, ds: dict):
 # ── Main ────────────────────────────────────────────────────────────────────
 
 def main():
-    print("downloading data...")
-    base_path = ensure_data(BASE_INTERVAL)
-
-    higher = {}
-    for iv in HIGHER_INTERVALS:
-        try:
-            higher[iv] = ensure_data(iv)
-        except Exception as e:
-            print(f"  skipping {iv}: {e}")
+    base_path = csv_name(BASE_INTERVAL)
+    if not base_path.exists():
+        sys.exit(f"error: {base_path} not found — run downloader first")
 
     print(f"loading {base_path.name}...")
     base = load(base_path)
@@ -193,7 +167,11 @@ def main():
     print("engineering base features...")
     base = base_features(base)
 
-    for iv, path in higher.items():
+    for iv in HIGHER_INTERVALS:
+        path = csv_name(iv)
+        if not path.exists():
+            print(f"  skipping {iv} (not found)")
+            continue
         prefix = iv.replace("/", "")
         print(f"merging {iv} features...")
         h = load(path)

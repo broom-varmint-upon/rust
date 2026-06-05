@@ -9,6 +9,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            target/
+            downloader/target/
+          key: rust-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build downloader
+        run: cargo build --release --manifest-path downloader/Cargo.toml
+
+      - name: Download data
+        run: |
+          for iv in 1s 1m 5m 15m 1h 4h 1d; do
+            ./downloader/target/release/downloader \
+              "https://data.binance.vision/data/spot/monthly/klines/BTCUSDT/${iv}/BTCUSDT-${iv}-2026-05.zip"
+          done
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

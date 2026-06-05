@@ -8,17 +8,18 @@ from sklearn.metrics import accuracy_score, classification_report, log_loss
 
 # ── Config ──────────────────────────────────────────────────────────────────
 
-MONTH = "2026-05"
 SYMBOL = "BTCUSDT"
 BASE_INTERVAL = "1s"
-HIGHER_INTERVALS = ["1m", "5m", "15m", "1h", "4h", "1d"]
-
+ALL_INTERVALS = [
+    "1s", "1m", "3m", "5m", "15m", "30m",
+    "1h", "2h", "4h", "6h", "8h", "12h",
+    "1d", "3d", "1w", "1mo",
+]
 CSV_COLS = [
     "open_time", "open", "high", "low", "close", "volume",
     "close_time", "quote_volume", "trade_count",
     "taker_buy_base", "taker_buy_quote", "ignore",
 ]
-
 WINDOWS = [1, 5, 10, 30, 60, 300]
 TF_WINDOWS = [3, 6, 12]
 TRAIN_RATIO = 0.70
@@ -32,8 +33,19 @@ EXCLUDE_COLS = {
 
 # ── Data ────────────────────────────────────────────────────────────────────
 
-def csv_name(interval: str) -> Path:
-    return Path(f"{SYMBOL}-{interval}-{MONTH}.csv")
+
+def detect_month() -> str:
+    csvs = list(Path(".").glob(f"{SYMBOL}-*-????-??.csv"))
+    if not csvs:
+        sys.exit("error: no CSV files found — run downloader first")
+    parts = csvs[0].stem.split("-")
+    month = "-".join(parts[-2:])
+    print(f"detected month: {month} ({len(csvs)} intervals)")
+    return month
+
+
+def csv_name(interval: str, month: str) -> Path:
+    return Path(f"{SYMBOL}-{interval}-{month}.csv")
 
 
 def load(csv_path: Path) -> pd.DataFrame:
@@ -44,7 +56,9 @@ def load(csv_path: Path) -> pd.DataFrame:
     df.drop(columns=["close_time", "ignore"], inplace=True)
     return df
 
+
 # ── Features ────────────────────────────────────────────────────────────────
+
 
 def base_features(df: pd.DataFrame) -> pd.DataFrame:
     ret = df["close"].pct_change()
@@ -92,7 +106,9 @@ def higher_features(df: pd.DataFrame, prefix: str) -> pd.DataFrame:
 
     return h
 
+
 # ── Dataset ─────────────────────────────────────────────────────────────────
+
 
 def build_dataset(df: pd.DataFrame):
     feature_cols = [c for c in df.columns if c not in EXCLUDE_COLS]
@@ -115,7 +131,9 @@ def build_dataset(df: pd.DataFrame):
         "feature_cols": feature_cols,
     }
 
+
 # ── Train ───────────────────────────────────────────────────────────────────
+
 
 def train_model(ds: dict):
     dtrain = lgb.Dataset(ds["X_train"], label=ds["y_train"])
@@ -124,6 +142,7 @@ def train_model(ds: dict):
     params = {
         "objective": "binary",
         "metric": "binary_logloss",
+        "is_unbalance": True,
         "learning_rate": 0.05,
         "num_leaves": 63,
         "max_depth": 7,
@@ -153,12 +172,16 @@ def evaluate(model, ds: dict):
         print(f"log_loss:  {log_loss(y, preds):.4f}")
         print(classification_report(y, labels, target_names=["down", "up"]))
 
+
 # ── Main ────────────────────────────────────────────────────────────────────
 
+
 def main():
-    base_path = csv_name(BASE_INTERVAL)
+    month = detect_month()
+
+    base_path = csv_name(BASE_INTERVAL, month)
     if not base_path.exists():
-        sys.exit(f"error: {base_path} not found — run downloader first")
+        sys.exit(f"error: {base_path} not found")
 
     print(f"loading {base_path.name}...")
     base = load(base_path)
@@ -167,8 +190,10 @@ def main():
     print("engineering base features...")
     base = base_features(base)
 
-    for iv in HIGHER_INTERVALS:
-        path = csv_name(iv)
+    for iv in ALL_INTERVALS:
+        if iv == BASE_INTERVAL:
+            continue
+        path = csv_name(iv, month)
         if not path.exists():
             print(f"  skipping {iv} (not found)")
             continue
@@ -186,6 +211,10 @@ def main():
     print("training...")
     model = train_model(ds)
     evaluate(model, ds)
+
+    model_path = Path("model.bin")
+    model.save_model(str(model_path))
+    print(f"\nsaved {model_path} ({model_path.stat().st_size / 1024:.0f} KB)")
 
 
 if __name__ == "__main__":

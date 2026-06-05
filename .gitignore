@@ -6,6 +6,9 @@ data/
 *.zip
 *.csv
 
+# Model (uploaded to releases, not tracked in repo)
+model.bin
+
 # Python
 __pycache__/
 *.pyc

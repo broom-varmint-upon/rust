@@ -117,7 +117,8 @@ def higher_features(df: pd.DataFrame, prefix: str) -> pd.DataFrame:
 def build_dataset(df: pd.DataFrame):
     feature_cols = [c for c in df.columns if c not in EXCLUDE_COLS]
 
-    df["target"] = (df["close"].shift(-TARGET_FORWARD) > df["close"]).astype(np.int8)
+    target = (df["close"].shift(-TARGET_FORWARD) > df["close"]).astype(np.int8)
+    df = pd.concat([df, target.rename("target")], axis=1)
     df = df.dropna(subset=["target"])
 
     X = df[feature_cols].values.astype(np.float32)

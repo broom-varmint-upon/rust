@@ -16,12 +16,5 @@ jobs:
       - name: Install dependencies
         run: pip install -r ml/requirements.txt
 
-      - name: Download data
-        run: |
-          curl -L -o data.zip \
-            "https://data.binance.vision/data/spot/monthly/klines/BTCUSDT/1s/BTCUSDT-1s-2026-05.zip"
-          python -c "import zipfile; zipfile.ZipFile('data.zip').extractall('.')"
-          rm data.zip
-
       - name: Train
-        run: python ml/train.py BTCUSDT-1s-2026-05.csv
+        run: python ml/train.py

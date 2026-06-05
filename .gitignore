@@ -2,6 +2,7 @@
 downloader/target/
 
 # Data
+data/
 *.zip
 *.csv
 

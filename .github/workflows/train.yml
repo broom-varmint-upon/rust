@@ -26,7 +26,7 @@ jobs:
         id: month
         run: |
           LAST=$(cat ml/LAST_PROCESSED 2>/dev/null || echo "2017-07")
-          NEXT=$(date -d "$LAST + 1 month" +%Y-%m)
+          NEXT=$(date -d "${LAST}-01 + 1 month" +%Y-%m)
           echo "next=$NEXT" >> $GITHUB_OUTPUT
           echo "last=$LAST" >> $GITHUB_OUTPUT
 

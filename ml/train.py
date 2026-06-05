@@ -61,7 +61,7 @@ def add_target(df: pd.DataFrame) -> pd.DataFrame:
 
 def build_dataset(df: pd.DataFrame):
     feature_cols = [c for c in df.columns if c not in ("open_time", "close", "target", "open", "high", "low", "volume", "quote_volume", "trade_count", "taker_buy_base", "taker_buy_quote")]
-    df = df.dropna(subset=feature_cols + ["target"])
+    df = df.dropna(subset=["target"])
 
     X = df[feature_cols].values
     y = df["target"].values

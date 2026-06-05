@@ -1,6 +1,14 @@
 # Rust
 downloader/target/
 
+# Data
+*.zip
+*.csv
+
+# Python
+__pycache__/
+*.pyc
+
 # Editor / IDE
 .idea/
 .vscode/

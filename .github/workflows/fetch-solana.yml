@@ -1,0 +1,98 @@
+name: Fetch Solana Data
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      start_slot:
+        description: 'Start slot (inclusive)'
+        required: true
+        type: string
+      end_slot:
+        description: 'End slot (exclusive)'
+        required: true
+        type: string
+      threads:
+        description: 'Number of firehose threads'
+        required: false
+        default: '2'
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Clang 16
+        run: |
+          wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s -- 16
+          sudo apt-get update && sudo apt-get install -y \
+            gcc-13 g++-13 \
+            zlib1g-dev \
+            libssl-dev \
+            libtool
+          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-16 100
+          sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-16 100
+
+      - uses: actions/cache@v5
+        with:
+          path: solana-fetcher/target/
+          key: solana-${{ hashFiles('solana-fetcher/Cargo.lock') }}
+          restore-keys: solana-
+
+      - name: Build solana-fetcher
+        env:
+          CC: clang
+          CXX: clang++
+          LIBCLANG_PATH: /usr/lib/llvm16/lib/libclang.so
+        run: cargo build --release --manifest-path solana-fetcher/Cargo.toml
+
+      - name: Fetch data
+        run: |
+          mkdir -p solana-data
+          ./solana-fetcher/target/release/solana-fetcher \
+            ${{ inputs.start_slot }} \
+            ${{ inputs.end_slot }} \
+            ./solana-data \
+            --threads ${{ inputs.threads }}
+
+      - name: Compress output
+        run: |
+          cd solana-data
+          tar czf ../solana-blocks-${{ inputs.start_slot }}-${{ inputs.end_slot }}.tar.gz \
+            *.ndjson.gz 2>/dev/null || \
+          tar czf ../solana-blocks-${{ inputs.start_slot }}-${{ inputs.end_slot }}.tar.gz \
+            *
+
+      - name: Upload to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="solana-${{ inputs.start_slot }}-${{ inputs.end_slot }}"
+          ARCHIVE="solana-blocks-${{ inputs.start_slot }}-${{ inputs.end_slot }}.tar.gz"
+          
+          # Delete existing release if present
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          
+          # Create new release
+          gh release create "$TAG" \
+            "$ARCHIVE" \
+            --title "Solana blocks ${{ inputs.start_slot }}-${{ inputs.end_slot }}" \
+            --notes "Full transaction data for slots ${{ inputs.start_slot }} to ${{ inputs.end_slot }} (Old Faithful archive)"
+
+      - name: Print stats
+        run: |
+          echo "=== Output files ==="
+          ls -lh solana-data/
+          echo ""
+          echo "=== Archive size ==="
+          ls -lh solana-blocks-*.tar.gz

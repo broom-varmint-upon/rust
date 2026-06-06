@@ -1,8 +1,10 @@
 # Rust
 downloader/target/
+solana-fetcher/target/
 
 # Data
 data/
+solana-data/
 *.zip
 *.csv
 
